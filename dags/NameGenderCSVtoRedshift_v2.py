@@ -1,6 +1,5 @@
 from airflow import DAG
 from airflow.operators.python import PythonOperator
-# from airflow.operators import PythonOperator
 from airflow.models import Variable
 
 from datetime import datetime
@@ -29,29 +28,43 @@ def extract(url):
 
 
 def transform(text):
-    logging.info("transform started")
-    # ignore the first line - header
-    lines = text.split("\n")[1:]
-    logging.info("transform done")
-    return lines
-
-
-def load(lines):
-    logging.info("load started")
-    cur = get_Redshift_connection()
-    sql = "BEGIN;DELETE FROM keeyong.name_gender;"
+    logging.info("Transform started")	
+    lines = text.strip().split("\n")[1:] # 첫 번째 라인을 제외하고 처리
+    records = []
     for l in lines:
-        if l != '':
-            (name, gender) = l.split(",")
-            sql += f"INSERT INTO keeyong.name_gender VALUES ('{name}', '{gender}');"
-    sql += "END;"
-    logging.info(sql)
-    """
-    Do we want to enclose try/catch here
-    """
-    cur.execute(sql)
-    logging.info("load done")
+      (name, gender) = l.split(",") # l = "Keeyong,M" -> [ 'keeyong', 'M' ]
+      records.append([name, gender])
+    logging.info("Transform ended")
+    return records
 
+
+def load(records):
+    logging.info("load started")
+    """
+    records = [
+      [ "Keeyong", "M" ],
+      [ "Claire", "F" ],
+      ...
+    ]
+    """
+    schema = "keeyong"
+    # BEGIN과 END를 사용해서 SQL 결과를 트랜잭션으로 만들어주는 것이 좋음
+    cur = get_Redshift_connection()
+    try:
+        cur.execute("BEGIN;")
+        cur.execute(f"DELETE FROM {schema}.name_gender;") 
+        # DELETE FROM을 먼저 수행 -> FULL REFRESH을 하는 형태
+        for r in records:
+            name = r[0]
+            gender = r[1]
+            print(name, "-", gender)
+            sql = f"INSERT INTO {schema}.name_gender VALUES ('{name}', '{gender}')"
+            cur.execute(sql)
+        cur.execute("COMMIT;")   # cur.execute("END;") 
+    except (Exception, psycopg2.DatabaseError) as error:
+        print(error)
+        cur.execute("ROLLBACK;")   
+    logging.info("load done")
 
 def etl(**context):
     link = context["params"]["url"]
