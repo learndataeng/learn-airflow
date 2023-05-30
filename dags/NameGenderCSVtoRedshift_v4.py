@@ -13,7 +13,7 @@ import psycopg2
 
 
 
-def get_Redshift_connection(autocommit=False):
+def get_Redshift_connection(autocommit=True):
     hook = PostgresHook(postgres_conn_id='redshift_dev_db')
     conn = hook.get_conn()
     conn.autocommit = autocommit
@@ -31,9 +31,15 @@ def extract(**context):
 
 
 def transform(**context):
+    logging.info("Transform started")    
     text = context["task_instance"].xcom_pull(key="return_value", task_ids="extract")
-    lines = text.split("\n")[1:]
-    return lines
+    lines = text.strip().split("\n")[1:] # 첫 번째 라인을 제외하고 처리
+    records = []
+    for l in lines:
+      (name, gender) = l.split(",") # l = "Keeyong,M" -> [ 'keeyong', 'M' ]
+      records.append([name, gender])
+    logging.info("Transform ended")
+    return records
 
 
 def load(**context):
@@ -41,19 +47,36 @@ def load(**context):
     table = context["params"]["table"]
     
     cur = get_Redshift_connection()
-    lines = context["task_instance"].xcom_pull(key="return_value", task_ids="transform")
-    sql = "BEGIN; DELETE FROM {schema}.{table};".format(schema=schema, table=table)
-    for line in lines:
-        if line != "":
-            (name, gender) = line.split(",")
+    lines = context["task_instance"].xcom_pull(key="return_value", task_ids="transform")    
+    logging.info("load started")
+    """
+    records = [
+      [ "Keeyong", "M" ],
+      [ "Claire", "F" ],
+      ...
+    ]
+    """
+    schema = "keeyong"
+    # BEGIN과 END를 사용해서 SQL 결과를 트랜잭션으로 만들어주는 것이 좋음
+    cur = get_Redshift_connection()
+    try:
+        cur.execute("BEGIN;")
+        cur.execute(f"DELETE FROM {schema}.name_gender;") 
+        # DELETE FROM을 먼저 수행 -> FULL REFRESH을 하는 형태
+        for r in records:
+            name = r[0]
+            gender = r[1]
             print(name, "-", gender)
-            sql += f"""INSERT INTO {schema}.{table} VALUES ('{name}', '{gender}');"""
-    sql += "END;"
-    logging.info(sql)
-    cur.execute(sql)
+            sql = f"INSERT INTO {schema}.name_gender VALUES ('{name}', '{gender}')"
+            cur.execute(sql)
+        cur.execute("COMMIT;")   # cur.execute("END;") 
+    except (Exception, psycopg2.DatabaseError) as error:
+        print(error)
+        cur.execute("ROLLBACK;")   
+    logging.info("load done")
 
 
-dag_second_assignment = DAG(
+dag = DAG(
     dag_id = 'name_gender_v4',
     start_date = datetime(2023,4,6), # 날짜가 미래인 경우 실행이 안됨
     schedule = '0 2 * * *',  # 적당히 조절
@@ -73,14 +96,14 @@ extract = PythonOperator(
     params = {
         'url':  Variable.get("csv_url")
     },
-    dag = dag_second_assignment)
+    dag = dag)
 
 transform = PythonOperator(
     task_id = 'transform',
     python_callable = transform,
     params = { 
     },  
-    dag = dag_second_assignment)
+    dag = dag)
 
 load = PythonOperator(
     task_id = 'load',
@@ -89,6 +112,6 @@ load = PythonOperator(
         'schema': 'keeyong',   ## 자신의 스키마로 변경
         'table': 'name_gender'
     },
-    dag = dag_second_assignment)
+    dag = dag)
 
 extract >> transform >> load
