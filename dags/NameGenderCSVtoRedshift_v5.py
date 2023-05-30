@@ -11,7 +11,7 @@ import requests
 import logging
 
 
-def get_Redshift_connection(autocommit=False):
+def get_Redshift_connection(autocommit=True):
     hook = PostgresHook(postgres_conn_id='redshift_dev_db')
     conn = hook.get_conn()
     conn.autocommit = autocommit
@@ -27,22 +27,44 @@ def extract(url):
 
 @task
 def transform(text):
-    lines = text.split("\n")[1:]
-    return lines
+    lines = text.strip().split("\n")[1:] # 첫 번째 라인을 제외하고 처리
+    records = []
+    for l in lines:
+      (name, gender) = l.split(",") # l = "Keeyong,M" -> [ 'keeyong', 'M' ]
+      records.append([name, gender])
+    logging.info("Transform ended")
+    return records
 
 
 @task
 def load(schema, table, lines):
-    cur = get_Redshift_connection()
-    sql = f"BEGIN; DELETE FROM {schema}.{table};"
-    for line in lines:
-        if line != "":
-            (name, gender) = line.split(",")
-            logging.info(f"{name} - {gender}")
-            sql += f"""INSERT INTO {schema}.{table} VALUES ('{name}', '{gender}');"""
-    sql += "END;"
-    logging.info(sql)
-    cur.execute(sql)
+    logging.info("load started")    
+    cur = get_Redshift_connection()   
+    """
+    records = [
+      [ "Keeyong", "M" ],
+      [ "Claire", "F" ],
+      ...
+    ]
+    """
+    schema = "keeyong"
+    # BEGIN과 END를 사용해서 SQL 결과를 트랜잭션으로 만들어주는 것이 좋음
+    try:
+        cur.execute("BEGIN;")
+        cur.execute(f"DELETE FROM {schema}.name_gender;") 
+        # DELETE FROM을 먼저 수행 -> FULL REFRESH을 하는 형태
+        for r in records:
+            name = r[0]
+            gender = r[1]
+            print(name, "-", gender)
+            sql = f"INSERT INTO {schema}.name_gender VALUES ('{name}', '{gender}')"
+            cur.execute(sql)
+        cur.execute("COMMIT;")   # cur.execute("END;") 
+    except (Exception, psycopg2.DatabaseError) as error:
+        print(error)
+        cur.execute("ROLLBACK;")   
+    logging.info("load done")
+
 
 
 with DAG(
