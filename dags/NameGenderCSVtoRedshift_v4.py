@@ -43,12 +43,11 @@ def transform(**context):
 
 
 def load(**context):
+    logging.info("load started")    
     schema = context["params"]["schema"]
     table = context["params"]["table"]
     
-    cur = get_Redshift_connection()
     lines = context["task_instance"].xcom_pull(key="return_value", task_ids="transform")    
-    logging.info("load started")
     """
     records = [
       [ "Keeyong", "M" ],
