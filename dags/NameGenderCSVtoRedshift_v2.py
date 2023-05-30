@@ -80,7 +80,7 @@ def etl(**context):
     load(lines)
 
 
-dag_second_assignment = DAG(
+dag = DAG(
     dag_id = 'name_gender_v2',
     start_date = datetime(2023,4,6), # 날짜가 미래인 경우 실행이 안됨
     schedule = '0 2 * * *',  # 적당히 조절
@@ -94,9 +94,9 @@ dag_second_assignment = DAG(
 
 
 task = PythonOperator(
-	task_id = 'perform_etl',
-	python_callable = etl,
-        params = {
-            'url': "https://s3-geospatial.s3-us-west-2.amazonaws.com/name_gender.csv"
-        },
-	dag = dag_second_assignment)
+    task_id = 'perform_etl',
+    python_callable = etl,
+    params = {
+        'url': "https://s3-geospatial.s3-us-west-2.amazonaws.com/name_gender.csv"
+    },
+    dag = dag)
