@@ -65,7 +65,7 @@ def load(schema, table, lines):
 
 
 with DAG(
-    dag_id='NameGender_v5',
+    dag_id='namegender_v5',
     start_date=datetime(2022, 10, 6),  # 날짜가 미래인 경우 실행이 안됨
     schedule='0 2 * * *',  # 적당히 조절
     max_active_runs=1,
