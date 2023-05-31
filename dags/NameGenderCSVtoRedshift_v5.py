@@ -1,11 +1,10 @@
 from airflow import DAG
 from airflow.models import Variable
-from airflow.hooks.postgres_hook import PostgresHook
+from airflow.providers.postgres.hooks.postgres import PostgresHook
 from airflow.decorators import task
 
 from datetime import datetime
 from datetime import timedelta
-# from plugins import slack
 
 import requests
 import logging
@@ -64,7 +63,6 @@ def load(schema, table, lines):
         print(error)
         cur.execute("ROLLBACK;")   
     logging.info("load done")
-
 
 
 with DAG(
