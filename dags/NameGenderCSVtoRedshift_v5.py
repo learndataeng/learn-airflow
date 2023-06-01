@@ -36,7 +36,7 @@ def transform(text):
 
 
 @task
-def load(schema, table, lines):
+def load(schema, table, records):
     logging.info("load started")    
     cur = get_Redshift_connection()   
     """
