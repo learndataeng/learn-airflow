@@ -1,15 +1,13 @@
 from airflow import DAG
-from airflow.operators.python import PythonOperator
-# from airflow.operators import PythonOperator
 from airflow.models import Variable
-from airflow.hooks.postgres_hook import PostgresHook
+from airflow.providers.postgres.hooks.postgres import PostgresHook
+from airflow.decorators import task
 
 from datetime import datetime
 from datetime import timedelta
 
 import requests
 import logging
-import psycopg2
 import json
 
 
@@ -18,8 +16,8 @@ def get_Redshift_connection():
     hook = PostgresHook(postgres_conn_id='redshift_dev_db')
     return hook.get_conn().cursor()
 
-
-def etl(**context):
+@task
+def etl(schema, table):
     api_key = Variable.get("open_weather_api_key")
     # 서울의 위도/경도
     lat = 37.5665
@@ -38,28 +36,29 @@ def etl(**context):
         ret.append("('{}',{},{},{})".format(day, d["temp"]["day"], d["temp"]["min"], d["temp"]["max"]))
 
     cur = get_Redshift_connection()
-    insert_sql = """DELETE FROM keeyong.weather_forecast;INSERT INTO keeyong.weather_forecast VALUES """ + ",".join(ret)
+    drop_recreate_sql = f"""DROP TABLE IF EXISTS {schema}.{table};
+CREATE TABLE {schema}.{table} (
+    date date,
+    temp float,
+    min_temp float,
+    max_temp float,
+    created_date timestamp default GETDATE()
+);
+"""
+    insert_sql = f"""INSERT INTO {schema}.{table} VALUES """ + ",".join(ret)
+    logging.info(drop_recreate_sql)
     logging.info(insert_sql)
     try:
+        cur.execute(drop_recreate_sql)
         cur.execute(insert_sql)
         cur.execute("Commit;")
     except Exception as e:
         cur.execute("Rollback;")
         raise
 
-"""
-CREATE TABLE keeyong.weather_forecast (
-    date date,
-    temp float,
-    min_temp float,
-    max_temp float,
-    updated_date timestamp default GETDATE()
-);
-"""
-
-dag = DAG(
+with DAG(
     dag_id = 'Weather_to_Redshift',
-    start_date = datetime(2022,8,24), # 날짜가 미래인 경우 실행이 안됨
+    start_date = datetime(2023,5,30), # 날짜가 미래인 경우 실행이 안됨
     schedule = '0 2 * * *',  # 적당히 조절
     max_active_runs = 1,
     catchup = False,
@@ -67,10 +66,6 @@ dag = DAG(
         'retries': 1,
         'retry_delay': timedelta(minutes=3),
     }
-)
+) as dag:
 
-etl = PythonOperator(
-    task_id = 'etl',
-    python_callable = etl,
-    dag = dag
-)
+    etl("keeyong", "weather_forecast")
