@@ -30,10 +30,11 @@ def get_historical_prices(symbol):
     return records
 
 
-def _create_table(cur, schema, table):
-    cur.execute(f"DROP TABLE IF EXISTS {schema}.{table};")
+def _create_table(cur, schema, table, drop_first):
+    if drop_first:
+        cur.execute(f"DROP TABLE IF EXISTS {schema}.{table};")
     cur.execute(f"""
-CREATE TABLE {schema}.{table} (
+CREATE TABLE IF NOT EXISTS {schema}.{table} (
     date date,
     "open" float,
     high float,
@@ -49,8 +50,8 @@ def load(schema, table, records):
     cur = get_Redshift_connection()
     try:
         cur.execute("BEGIN;")
-        # 원본 테이블 생성 - 테이블이 처음 한번 만들어질 때 필요한 코드
-        _create_table(cur, schema, table)
+        # 원본 테이블이 없으면 생성 - 테이블이 처음 한번 만들어질 때 필요한 코드
+        _create_table(cur, schema, table, False)
         # 임시 테이블로 원본 테이블을 복사
         cur.execute(f"CREATE TEMP TABLE t AS SELECT * FROM {schema}.{table};")
         for r in records:
@@ -59,7 +60,7 @@ def load(schema, table, records):
             cur.execute(sql)
 
         # 원본 테이블 생성
-        _create_table(cur, schema, table)
+        _create_table(cur, schema, table, True)
         # 임시 테이블 내용을 원본 테이블로 복사
         cur.execute(f"INSERT INTO {schema}.{table} SELECT DISTINCT * FROM t;")
         cur.execute("COMMIT;")   # cur.execute("END;")
