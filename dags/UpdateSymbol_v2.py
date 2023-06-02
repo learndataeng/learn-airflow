@@ -24,7 +24,6 @@ def get_historical_prices(symbol):
 
     for index, row in data.iterrows():
         date = index.strftime('%Y-%m-%d %H:%M:%S')
-
         records.append([date, row["Open"], row["High"], row["Low"], row["Close"], row["Volume"]])
 
     return records
