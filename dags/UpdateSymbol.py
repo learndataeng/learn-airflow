@@ -51,9 +51,11 @@ CREATE TABLE {schema}.{table} (
             print(sql)
             cur.execute(sql)
         cur.execute("COMMIT;")   # cur.execute("END;")
-    except (Exception, psycopg2.DatabaseError) as error:
+    except Exception as error:
         print(error)
-        cur.execute("ROLLBACK;")   
+        cur.execute("ROLLBACK;")
+        raise
+
     logging.info("load done")
 
 
