@@ -63,9 +63,10 @@ def load(schema, table, records):
         # 임시 테이블 내용을 원본 테이블로 복사
         cur.execute(f"INSERT INTO {schema}.{table} SELECT DISTINCT * FROM t;")
         cur.execute("COMMIT;")   # cur.execute("END;")
-    except (Exception, psycopg2.DatabaseError) as error:
+    except Exception as error:
         print(error)
-        cur.execute("ROLLBACK;")   
+        cur.execute("ROLLBACK;") 
+        raise
     logging.info("load done")
 
 
