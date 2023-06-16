@@ -62,9 +62,10 @@ def download_tab_in_gsheet(**context):
 
 def copy_to_s3(**context):
     table = context["params"]["table"]
+    s3_key = context["params"]["s3_key"]
     s3_conn_id = "aws_conn_id"
     s3_bucket = "grepp-data-engineering"
-    s3_key = table
+    s3_key = schema + "_" + table
     data_dir = Variable.get("local_data_dir")
     local_files_to_upload = [ data_dir+'{}.csv'.format(table) ]
     replace = True
@@ -88,7 +89,7 @@ dag = DAG(
 sheets = [
     {
         "url": "https://docs.google.com/spreadsheets/d/1hW-_16OqgctX-_lXBa0VSmQAs98uUnmfOqvDYYjuE50/",
-        "tab": "Test",
+        "tab": "SheetToRedshift",
         "schema": "keeyong",
         "table": "spreadsheet_copy_testing"
     }
@@ -101,23 +102,27 @@ for sheet in sheets:
         params = sheet,
         dag = dag)
 
+    s3_key = sheet["schema"] + "_" + sheet["table"]
+
     copy_to_s3 = PythonOperator(
         task_id = 'copy_{}_to_s3'.format(sheet["table"]),
         python_callable = copy_to_s3,
         params = {
-            "table": sheet["table"]
+            "table": sheet["table"],
+            "s3_key": s3_key
         },
         dag = dag)
 
     run_copy_sql = S3ToRedshiftOperator(
         task_id = 'run_copy_sql_{}'.format(sheet["table"]),
         s3_bucket = "grepp-data-engineering",
-        s3_key = sheet["table"],
+        s3_key = s3_key,
         schema = sheet["schema"],
         table = sheet["table"],
         copy_options=['csv', 'IGNOREHEADER 1'],
         method = 'REPLACE',
         redshift_conn_id = "redshift_dev_db",
+        aws_conn_id = 'aws_conn_id',
         dag = dag
     )
 
