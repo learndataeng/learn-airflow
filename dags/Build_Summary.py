@@ -58,17 +58,18 @@ dag = DAG(
 )
 
 execsql = PythonOperator(
-    task_id = 'execsql',
+    task_id = 'mau_summary',
     python_callable = execSQL,
     params = {
         'schema' : 'keeyong',
-        'table': 'channel_summary',
-        'sql' : """SELECT
-	      DISTINCT A.userid,
-        FIRST_VALUE(A.channel) over(partition by A.userid order by B.ts rows between unbounded preceding and unbounded following) AS First_Channel,
-        LAST_VALUE(A.channel) over(partition by A.userid order by B.ts rows between unbounded preceding and unbounded following) AS Last_Channel
-        FROM raw_data.user_session_channel A
-        LEFT JOIN raw_data.session_timestamp B ON A.sessionid = B.sessionid;"""
+        'table': 'mau_summary',
+        'sql' : """SELECT 
+  TO_CHAR(A.ts, 'YYYY-MM') AS month,
+  COUNT(DISTINCT B.userid) AS mau
+FROM raw_data.session_timestamp A
+JOIN raw_data.user_session_channel B ON A.sessionid = B.sessionid
+GROUP BY 1 
+;"""
     },
     dag = dag
 )
