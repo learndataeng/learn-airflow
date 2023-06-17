@@ -47,7 +47,7 @@ def load(**context):
     schema = context["params"]["schema"]
     table = context["params"]["table"]
     
-    lines = context["task_instance"].xcom_pull(key="return_value", task_ids="transform")    
+    records = context["task_instance"].xcom_pull(key="return_value", task_ids="transform")    
     """
     records = [
       [ "Keeyong", "M" ],
@@ -70,7 +70,8 @@ def load(**context):
         cur.execute("COMMIT;")   # cur.execute("END;") 
     except (Exception, psycopg2.DatabaseError) as error:
         print(error)
-        cur.execute("ROLLBACK;")   
+        cur.execute("ROLLBACK;")
+        raise
     logging.info("load done")
 
 
