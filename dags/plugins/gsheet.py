@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+from airflow.hooks.postgres_hook import PostgresHook
 from airflow.models import Variable
 from oauth2client.service_account import ServiceAccountCredentials
 
@@ -19,7 +20,7 @@ def write_variable_to_local_file(variable_name, local_file_path):
 
 
 def get_gsheet_client():
-    data_dir = Variable.get("local_data_dir")
+    data_dir = Variable.get("DATA_DIR")
     scope = ['https://spreadsheets.google.com/feeds', 'https://www.googleapis.com/auth/drive']
     gs_json_file_path = data_dir + 'google-sheet.json'
 
@@ -92,6 +93,39 @@ def get_google_sheet_to_lists(sheet_uri, tab=None, header_line=1, remove_dollar_
     else:
         data = [l for l in data if l != header]
     return data, header
+
+
+def add_df_to_sheet_in_bulk(sh, sheet, df, header=None, clear=False):
+    records = []
+    headers = list(df.columns)
+    records.append(headers)
+
+    for _, row in df.iterrows():
+        record = []
+        for column in headers:
+            if str(df.dtypes[column]) in ('object', 'datetime64[ns]'):
+                record.append(str(row[column]))
+            else:
+                record.append(row[column])
+        records.append(record)
+
+    if clear:
+        sh.worksheet(sheet).clear()
+    sh.values_update(
+        '{sheet}!A1'.format(sheet=sheet),
+        params={'valueInputOption': 'RAW'},
+        body={'values': records}
+    )
+
+
+def update_sheet(filename, sheetname, sql, conn_id):
+    client = get_gsheet_client()
+    hook = PostgresHook(postgres_conn_id=conn_id)
+    sh = client.open(filename)
+    df = hook.get_pandas_df(sql)
+    print(sh.worksheets())
+    sh.worksheet(sheetname).clear()
+    add_df_to_sheet_in_bulk(sh, sheetname, df.fillna(''))
 
 
 def replace_dollar_comma(lll):
