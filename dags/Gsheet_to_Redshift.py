@@ -51,7 +51,7 @@ def download_tab_in_gsheet(**context):
     url = context["params"]["url"]
     tab = context["params"]["tab"]
     table = context["params"]["table"]
-    data_dir = Variable.get("local_data_dir")
+    data_dir = Variable.get("DATA_DIR")
 
     gsheet.get_google_sheet_to_csv(
         url,
@@ -63,10 +63,10 @@ def download_tab_in_gsheet(**context):
 def copy_to_s3(**context):
     table = context["params"]["table"]
     s3_key = context["params"]["s3_key"]
+
     s3_conn_id = "aws_conn_id"
     s3_bucket = "grepp-data-engineering"
-    s3_key = schema + "_" + table
-    data_dir = Variable.get("local_data_dir")
+    data_dir = Variable.get("DATA_DIR")
     local_files_to_upload = [ data_dir+'{}.csv'.format(table) ]
     replace = True
 
