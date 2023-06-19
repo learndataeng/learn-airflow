@@ -7,6 +7,7 @@ dag = DAG(
     'Learn_Jinja',
     schedule='0 0 * * *',  # 매일 실행
     start_date=datetime(2023, 6, 1),
+    catchup=False
 )
 
 # BashOperator를 사용하여 템플릿 작업 정의
