@@ -7,7 +7,7 @@ from airflow.providers.amazon.aws.hooks.s3 import S3Hook
 import pdb
 
 def upload_to_s3(filename: str, key: str, bucket_name: str) -> None:
-    pdb.set_trace()  # µð¹ö±ë ¸ðµå ÁøÀÔ
+    pdb.set_trace()  # ë””ë²„ê¹… ëª¨ë“œ ì§„ìž…
     hook = S3Hook('aws_conn_id')
     
     files = hook.list_keys(bucket_name)

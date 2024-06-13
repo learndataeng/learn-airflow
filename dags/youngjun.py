@@ -11,7 +11,7 @@ import os
 
 import pdb
 
-# DAG ±âº» ¼³Á¤
+# DAG ê¸°ë³¸ ì„¤ì •
 default_args = {
     'owner': 'airflow',
     'depends_on_past': False,
@@ -20,7 +20,7 @@ default_args = {
     'retries': 1,
 }
 
-# DAG Á¤ÀÇ
+# DAG ì •ì˜
 with DAG(
     'api_to_s3_to_redshift',
     default_args=default_args,
@@ -30,16 +30,16 @@ with DAG(
     catchup=False,
 ) as dag:
 
-    # 1. API È£ÃâÇÏ¿© µ¥ÀÌÅÍÇÁ·¹ÀÓ ÇüÅÂ·Î º¯È¯ÇÏ´Â ÇÔ¼ö
+    # 1. API í˜¸ì¶œí•˜ì—¬ ë°ì´í„°í”„ë ˆìž„ í˜•íƒœë¡œ ë³€í™˜í•˜ëŠ” í•¨ìˆ˜
     def fetch_api_data():
-        # ÇöÀç ³¯Â¥¸¦ YYYYMMDDHH Çü½ÄÀ¸·Î ¾ò±â (¿¹: 1½Ã°£ Àü µ¥ÀÌÅÍ ¿äÃ»)
+        # í˜„ìž¬ ë‚ ì§œë¥¼ YYYYMMDDHH í˜•ì‹ìœ¼ë¡œ ì–»ê¸° (ì˜ˆ: 1ì‹œê°„ ì „ ë°ì´í„° ìš”ì²­)
         current_datetime = (datetime.datetime.now() - datetime.timedelta(hours=1)).strftime("%Y%m%d%H00")
         
-        # API URL (json Çü½ÄÀ¸·Î ¿äÃ»)
+        # API URL (json í˜•ì‹ìœ¼ë¡œ ìš”ì²­)
         api_url = f"http://openapi.seoul.go.kr:8088/4b746a725579756e35386955445a73/json/TimeAverageCityAir/1/100/{current_datetime}"
         response = requests.get(api_url)
         try:
-            response.raise_for_status()  # HTTP ÀÀ´ä »óÅÂ ÄÚµå È®ÀÎ
+            response.raise_for_status()  # HTTP ì‘ë‹µ ìƒíƒœ ì½”ë“œ í™•ì¸
             data = response.json()
         except requests.exceptions.HTTPError as http_err:
             raise ValueError(f"HTTP error occurred: {http_err}")
@@ -57,17 +57,17 @@ with DAG(
         
         df = pd.DataFrame(items)
 
-        # ÄÃ·³¸íÀ» ERDÀÇ ¿µ¾î ÀÌ¸§À¸·Î º¯°æ
+        # ì»¬ëŸ¼ëª…ì„ ERDì˜ ì˜ì–´ ì´ë¦„ìœ¼ë¡œ ë³€ê²½
         df.columns = [
             'date', 'region_code', 'region_name', 'office_code', 'office_name',
             'dust_1h', 'dust_24h', 'ultradust', 'O3', 'NO2', 'CO', 'SO2'
         ]
-        # µ¥ÀÌÅÍÇÁ·¹ÀÓÀ» UTF-8 ÀÎÄÚµùÀ¸·Î CSV Çü½ÄÀÇ ¹®ÀÚ¿­·Î º¯È¯
+        # ë°ì´í„°í”„ë ˆìž„ì„ UTF-8 ì¸ì½”ë”©ìœ¼ë¡œ CSV í˜•ì‹ì˜ ë¬¸ìžì—´ë¡œ ë³€í™˜
         csv_data = df.to_csv(index=False, encoding='utf-8-sig')
         
         # pdb.set_trace()
         
-        # ÇöÀç ÀÛ¾÷ µð·ºÅä¸®¸¦ »ç¿ëÇÏ¿© ÆÄÀÏ ÀúÀå
+        # í˜„ìž¬ ìž‘ì—… ë””ë ‰í† ë¦¬ë¥¼ ì‚¬ìš©í•˜ì—¬ íŒŒì¼ ì €ìž¥
         file_path = os.path.join(os.getcwd(), 'api_data.csv')
         with open(file_path, 'w', encoding='utf-8-sig') as f:
             f.write(csv_data)
@@ -79,17 +79,17 @@ with DAG(
         python_callable=fetch_api_data,
     )
 
-    # 2. µ¥ÀÌÅÍÇÁ·¹ÀÓ ÇüÅÂ·Î º¯È¯ÇÑ µ¥ÀÌÅÍ¸¦ S3¿¡ ¾÷·Îµå
+    # 2. ë°ì´í„°í”„ë ˆìž„ í˜•íƒœë¡œ ë³€í™˜í•œ ë°ì´í„°ë¥¼ S3ì— ì—…ë¡œë“œ
     upload_to_s3 = LocalFilesystemToS3Operator(
         task_id='upload_to_s3',
         filename="{{ task_instance.xcom_pull(task_ids='fetch_api_data') }}",
         dest_bucket='dust-dag',
         dest_key='dataSource/api_data.csv',
         aws_conn_id='aws_s3',
-        replace=True  # ÆÄÀÏÀÌ ÀÌ¹Ì Á¸ÀçÇÏ´Â °æ¿ì µ¤¾î¾²±â
+        replace=True  # íŒŒì¼ì´ ì´ë¯¸ ì¡´ìž¬í•˜ëŠ” ê²½ìš° ë®ì–´ì“°ê¸°
     )
 
-    # 3. S3 µ¥ÀÌÅÍ¸¦ Redshift Å×ÀÌºí¿¡ ÀûÀç
+    # 3. S3 ë°ì´í„°ë¥¼ Redshift í…Œì´ë¸”ì— ì ìž¬
     load_to_redshift = S3ToRedshiftOperator(
         task_id='load_to_redshift',
         schema='yusuyeon678',
@@ -101,5 +101,5 @@ with DAG(
         aws_conn_id='aws_s3',
     )
 
-    # Task ¼ø¼­ Á¤ÀÇ
+    # Task ìˆœì„œ ì •ì˜
     fetch_data >> upload_to_s3 >> load_to_redshift
