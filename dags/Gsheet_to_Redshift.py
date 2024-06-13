@@ -96,7 +96,7 @@ sheets = [
 ]
 
 for sheet in sheets:
-    download_tab_in_gsheet = PythonOperator(
+    download_tab_in_gsheet_task = PythonOperator(
         task_id = 'download_{}_in_gsheet'.format(sheet["table"]),
         python_callable = download_tab_in_gsheet,
         params = sheet,
@@ -104,7 +104,7 @@ for sheet in sheets:
 
     s3_key = sheet["schema"] + "_" + sheet["table"]
 
-    copy_to_s3 = PythonOperator(
+    copy_to_s3_task = PythonOperator(
         task_id = 'copy_{}_to_s3'.format(sheet["table"]),
         python_callable = copy_to_s3,
         params = {
@@ -126,4 +126,4 @@ for sheet in sheets:
         dag = dag
     )
 
-    download_tab_in_gsheet >> copy_to_s3 >> run_copy_sql
+    download_tab_in_gsheet_task >> copy_to_s3_task >> run_copy_sql
